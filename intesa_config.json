@@ -1,0 +1,9 @@
+{
+  "monitor_enabled": false,
+  "signal_interval_minutes": 15,
+  "news_interval_minutes": 15,
+  "buy_score_threshold": 80,
+  "sell_score_threshold": 30,
+  "telegram_enabled": false,
+  "daily_summary_hour": 8
+}

@@ -1,0 +1,253 @@
+<!doctype html><html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Intesa Sanpaolo — Core + Swing Dashboard</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--bg:#07101c;--p:#101b2b;--p2:#17263b;--line:#263a55;--txt:#eef4fb;--muted:#91a3b8;--g:#34d399;--r:#fb7185;--y:#fbbf24;--b:#60a5fa}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:14px system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:1600px;margin:auto;padding:18px}
+header{display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap}h1{margin:0;font-size:25px}.muted{color:var(--muted)}.logout{display:inline-block;margin-left:8px;color:var(--muted);text-decoration:none;padding:8px 10px;border:1px solid var(--line);border-radius:8px}.sep{border:0;border-top:1px solid var(--line);margin:12px 0}
+button,input{background:#0c1726;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:9px 11px}button{cursor:pointer;background:#2563eb;border:0;font-weight:700}.secondary{background:var(--p2)}
+.cards{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin:15px 0}.card,.panel{background:var(--p);border:1px solid var(--line);border-radius:12px;padding:13px}.label{font-size:12px;color:var(--muted)}.big{font-size:21px;font-weight:800;margin-top:4px}
+.grid{display:grid;grid-template-columns:2.2fr 1fr;gap:12px}.chart{height:460px;position:relative}.chart canvas{display:block;width:100%!important;height:100%!important}.chartnote{margin-top:10px;padding:9px 2px 2px;line-height:1.45}.tf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.tf .card{background:var(--p2)}
+.row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:var(--p2);font-weight:800}.g{color:var(--g)}.r{color:var(--r)}.y{color:var(--y)}.b{color:var(--b)}
+.score{font-size:44px;font-weight:900}.reason{padding:6px 0;border-bottom:1px solid var(--line)}.section{margin-top:12px}.news{max-height:420px;overflow:auto}.newsitem{padding:9px 0;border-bottom:1px solid var(--line)}.newsitem a{color:var(--b);text-decoration:none}.important{border-left:3px solid var(--y);padding-left:8px}
+.settings{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.field label{display:block;color:var(--muted);font-size:12px;margin-bottom:3px}.field input{width:100%}.status{margin-top:8px;color:var(--muted)}.error{color:var(--r);margin-top:8px}
+@media(max-width:1200px){.cards{grid-template-columns:repeat(4,1fr)}.grid{grid-template-columns:1fr}}@media(max-width:700px){.cards,.tf,.settings{grid-template-columns:repeat(2,1fr)}.chart{height:360px}}
+</style></head><body><div class="wrap">
+<header><div><h1>Intesa Sanpaolo <span class="muted">ISP.MI</span></h1><div class="muted">Core position + swing trading • Daily → 1H → 15m</div></div>
+<div><span class="pill" id="refreshstatus">Startar…</span><button class="secondary" onclick="refreshAll()">Uppdatera nu</button><a class="logout" href="/logout">Logga ut</a></div></header>
+
+<div class="cards">
+<div class="card"><div class="label">Kurs</div><div id="last" class="big">—</div></div>
+<div class="card"><div class="label">Beslutsläge</div><div id="alert" class="big">—</div></div>
+<div class="card"><div class="label">Föregående dags Range High</div><div id="rh" class="big g">—</div></div>
+<div class="card"><div class="label">Föregående dags Range Low</div><div id="rl" class="big r">—</div></div>
+<div class="card"><div class="label">Relativ volym</div><div id="rv" class="big">—</div></div>
+<div class="card"><div class="label">15m RSI</div><div id="rsi" class="big">—</div></div>
+<div class="card"><div class="label">Swing Action</div><div id="action" class="big">—</div></div>
+</div>
+
+<div class="grid"><div>
+<div class="panel"><div class="tf">
+<div class="card"><div class="label">DAILY</div><div id="daily" class="big">—</div><div id="dailyx" class="muted"></div></div>
+<div class="card"><div class="label">1H</div><div id="hour" class="big">—</div><div id="hourx" class="muted"></div></div>
+<div class="card"><div class="label">15M</div><div id="m15" class="big">—</div><div id="m15x" class="muted"></div></div></div>
+<div class="chart"><div id="rangehint" class="muted" style="margin:0 0 8px 2px">Röda/rosa linjen = föregående dags högsta. Orange linjen = föregående dags lägsta.</div><canvas id="chart"></canvas></div>
+<div class="muted chartnote">Datum och tid visas på separata rader i x-axeln. Swing-punkter är bekräftade efterföljande candles. De är referenspunkter, inte automatiska köp/sälj-order.</div></div>
+
+<div class="panel section"><h3>Signalmodell</h3>
+<div class="row"><span>Core</span><b id="core">HOLD</b></div>
+<div class="row"><span>Swing position</span><b id="swing">—</b></div>
+<div class="row"><span>VCP</span><b id="vcp">—</b></div>
+<div class="row"><span>Tight Base</span><b id="base">—</b></div>
+<div class="row"><span>Breakout</span><b id="breakout">—</b></div>
+<div class="row"><span>Retest</span><b id="retest">—</b></div>
+<div class="row"><span>Rejection</span><b id="rejection">—</b></div>
+<div class="row"><span>ATR 15m</span><b id="atr">—</b></div>
+<div class="row"><span>Närmsta Swing High</span><b id="above">—</b></div>
+<div class="row"><span>Närmsta Swing Low</span><b id="below">—</b></div><hr class="sep"><div class="label">Score V2 • max 100</div><div class="row"><span>Trend</span><b id="sc_trend">—</b></div><div class="row"><span>15m struktur</span><b id="sc_structure">—</b></div><div class="row"><span>Setup</span><b id="sc_setup">—</b></div><div class="row"><span>Momentum</span><b id="sc_momentum">—</b></div><div class="row"><span>Volym</span><b id="sc_volume">—</b></div>
+</div></div>
+
+<div><div class="panel"><div class="score" id="score2">—</div><div class="pill" id="alert2">—</div><div id="reasons" style="margin-top:9px"></div>
+<p class="muted">Systemet skiljer på långsiktigt Core och kortare Swing-position. Det lägger inga order.</p></div>
+
+<div class="panel section"><h3>Fundamenta</h3><div id="fundnote" class="muted" style="margin:0 0 8px">Multiplar från marknadsdata. Bankmått från Intesa Sanpaolos senaste H1 2026-rapport (30 juni 2026).</div>
+<div class="row"><span>P/E</span><b id="pe">—</b></div><div class="row"><span>Forward P/E</span><b id="fpe">—</b></div><div class="row"><span>Price/Book</span><b id="pb">—</b></div><div class="row"><span>Dividend yield</span><b id="dy">—</b></div><div class="row"><span>ROE</span><b id="roe">—</b></div><div class="row"><span>ROTE</span><b id="rote">—</b></div><div class="row"><span>CET1</span><b id="cet1">—</b></div><div class="row"><span>Net NPL</span><b id="npl">—</b></div><div class="row"><span>Net income H1</span><b id="ni">—</b></div><div class="row"><span>2026 guidance</span><b id="guidance">—</b></div><div class="row"><span>52w high</span><b id="w52h">—</b></div><div class="row"><span>52w low</span><b id="w52l">—</b></div></div>
+
+<div class="panel section"><h3>Viktiga nyheter</h3><div id="news" class="news">—</div></div></div></div>
+
+<div class="panel section"><h3>Telegram-alerts</h3>
+<p class="muted">Endast Telegram används. Bot-token och chat-ID läses från <b>intesa.env</b> och exponeras aldrig i webbläsaren.</p>
+<div class="settings">
+<div class="field"><label>Köp-score</label><input id="buy_thr" type="number" value="80"></div>
+<div class="field"><label>Sälj/risk-score</label><input id="sell_thr" type="number" value="30"></div>
+
+</div>
+<p><label><input type="checkbox" id="monitor"> Automatisk bevakning</label>
+<label style="margin-left:15px"><input type="checkbox" id="tg_enabled"> Telegram alerts</label>
+<label style="margin-left:15px">Daily report från kl <input id="daily_hour" type="number" min="0" max="23" value="8" style="width:60px"></label></p>
+<button onclick="saveConfig()">Spara</button><button class="secondary" onclick="testTelegram()">Skicka test</button><button class="secondary" onclick="runMonitor()">Kör kontroll nu</button>
+<div class="status" id="telegramstatus">—</div><div class="error" id="error"></div></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let chart = null;
+const money = x => x == null ? '—' : '€' + Number(x).toFixed(3);
+const num = x => x == null ? '—' : Number(x).toFixed(2);
+const yes = x => x ? '✓' : '—';
+
+function setTrend(el, v) {
+  el.className = 'big ' + (v === 'Bullish' ? 'g' : v === 'Bearish' ? 'r' : '');
+}
+
+async function analyse() {
+  const status = $('refreshstatus');
+  try {
+    status.textContent = 'Hämtar data…';
+    const r = await fetch('/api/analyse?ts=' + Date.now(), {cache:'no-store'});
+    let d;
+    try { d = await r.json(); } catch (_) { throw Error('Servern returnerade ett ogiltigt svar (HTTP ' + r.status + ').'); }
+    if (!r.ok) throw Error(d.error || ('Analysen misslyckades (HTTP ' + r.status + ')'));
+
+    $('last').textContent = money(d.last);
+    $('score2').textContent = d.score + '/100';
+    $('alert').textContent = d.alert;
+    $('alert2').textContent = d.alert;
+    $('rh').textContent = money(d.range.high);
+    $('rl').textContent = money(d.range.low);
+    $('rv').textContent = d.relative_volume == null ? '—' : Number(d.relative_volume).toFixed(2) + 'x';
+    $('rsi').textContent = num(d.rsi15);
+
+    $('daily').textContent = d.timeframes.daily.trend;
+    $('hour').textContent = d.timeframes['1h'].trend;
+    $('m15').textContent = d.timeframes['15m'].structure;
+    setTrend($('daily'), d.timeframes.daily.trend);
+    setTrend($('hour'), d.timeframes['1h'].trend);
+    setTrend($('m15'), d.timeframes['15m'].structure);
+
+    $('dailyx').textContent = 'EMA20 ' + num(d.timeframes.daily.ema20) + ' / EMA50 ' + num(d.timeframes.daily.ema50);
+    $('hourx').textContent = 'EMA20 ' + num(d.timeframes['1h'].ema20) + ' / EMA50 ' + num(d.timeframes['1h'].ema50);
+    $('m15x').textContent = 'Swing H ' + money(d.timeframes['15m'].swing_high) + ' / L ' + money(d.timeframes['15m'].swing_low);
+
+    $('core').textContent = d.timeframes.daily.trend === 'Bullish' ? 'HOLD CORE' : 'REVIEW CORE';
+    $('swing').textContent = d.buy_setup ? 'ADD SWING' : d.sell_risk ? 'REDUCE SWING' : 'HOLD/WAIT';
+    $('action').textContent = $('swing').textContent;
+
+    $('vcp').textContent = yes(d.vcp) + ' (' + d.vcp_contractions + ')';
+    $('base').textContent = yes(d.tight_base);
+    $('breakout').textContent = yes(d.patterns.breakout);
+    $('retest').textContent = yes(d.patterns.retest_high);
+    $('rejection').textContent = yes(d.patterns.rejection);
+    $('atr').textContent = money(d.atr15);
+    $('above').textContent = money(d.nearest_above);
+    $('below').textContent = money(d.nearest_below);
+    const sc = d.score_components || {};
+    $('sc_trend').textContent = (sc.trend ?? '—') + '/30';
+    $('sc_structure').textContent = (sc.structure ?? '—') + '/15';
+    $('sc_setup').textContent = (sc.setup ?? '—') + '/25';
+    $('sc_momentum').textContent = (sc.momentum ?? '—') + '/15';
+    $('sc_volume').textContent = (sc.volume ?? '—') + '/15';
+
+    $('reasons').innerHTML = (d.reasons || []).map(x => '<div class="reason">✓ ' + x + '</div>').join('') ||
+      '<div class="muted">Inga extra score-faktorer.</div>';
+
+    const f = d.fundamentals || {};
+    $('pe').textContent = num(f.pe);
+    $('fpe').textContent = num(f.forward_pe);
+    $('pb').textContent = num(f.price_to_book);
+    $('dy').textContent = f.dividend_yield == null ? '—' : (f.dividend_yield * 100).toFixed(2) + '%';
+    $('roe').textContent = f.official?.roe == null ? (f.roe == null ? '—' : (f.roe * 100).toFixed(2) + '%') : (f.official.roe * 100).toFixed(1) + '%';
+    $('rote').textContent = f.official?.rote == null ? '—' : (f.official.rote * 100).toFixed(1) + '%';
+    $('cet1').textContent = f.official?.cet1 == null ? '—' : (f.official.cet1 * 100).toFixed(1) + '%';
+    $('npl').textContent = f.official?.npl_net == null ? '—' : (f.official.npl_net * 100).toFixed(1) + '%';
+    $('ni').textContent = f.official?.net_income_h1 == null ? '—' : '€' + Number(f.official.net_income_h1).toFixed(1) + 'bn';
+    $('guidance').textContent = f.official?.net_income_guidance || '—';
+    if (f.official?.dividend_yield_guidance != null) $('dy').textContent = (f.official.dividend_yield_guidance * 100).toFixed(1) + '%*';
+    $('w52h').textContent = money(f.week52_high);
+    $('w52l').textContent = money(f.week52_low);
+
+    const b = d.bars || [];
+    const labels = b.map(x => {
+      const d = new Date(x.time);
+      const date = d.toLocaleDateString('sv-SE');
+      const time = d.toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit'});
+      return [date, time];
+    });
+    const hs = new Set((d.swings.highs || []).map(x => x.time));
+    const ls = new Set((d.swings.lows || []).map(x => x.time));
+
+    if (chart) chart.destroy();
+    chart = new Chart($('chart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {label:'Close', data:b.map(x=>x.close), borderWidth:2, pointRadius:0, tension:.04},
+          {label:'Föreg. dags Range High', data:b.map(()=>d.range.high), borderWidth:1.5, borderDash:[6,5], pointRadius:0},
+          {label:'Föreg. dags Range Low', data:b.map(()=>d.range.low), borderWidth:1.5, borderDash:[6,5], pointRadius:0},
+          {label:'Swing High', data:b.map(x=>hs.has(x.time)?x.high:null), showLine:false, pointRadius:4},
+          {label:'Swing Low', data:b.map(x=>ls.has(x.time)?x.low:null), showLine:false, pointRadius:4}
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        scales:{x:{ticks:{autoSkip:true,maxTicksLimit:8,maxRotation:0,minRotation:0,color:'#91a3b8',padding:8}},y:{ticks:{color:'#91a3b8'}}},
+        plugins:{legend:{labels:{color:'#eef4fb'}}}
+      }
+    });
+
+    status.textContent = 'Uppdaterad ' + new Date().toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit'});
+    $('error').textContent = '';
+  } catch(e) {
+    status.textContent = 'Datafel';
+    $('error').textContent = e.message;
+  }
+}
+
+async function loadNews() {
+  try {
+    const r = await fetch('/api/news?ts=' + Date.now(), {cache:'no-store'});
+    const a = await r.json();
+    $('news').innerHTML = a.map(x =>
+      `<div class="newsitem ${x.important?'important':''}">
+        <a target="_blank" rel="noopener" href="${x.link}"><b>${x.title}</b></a>
+        <div class="muted">${x.published||''}${x.important?' • VIKTIG':''}</div>
+      </div>`
+    ).join('') || 'Inga nyheter.';
+  } catch(e) {
+    $('news').textContent = e.message;
+  }
+}
+
+async function loadConfig() {
+  try {
+    const c = await (await fetch('/api/config?ts=' + Date.now(), {cache:'no-store'})).json();
+    $('buy_thr').value = c.buy_score_threshold || 80;
+    $('sell_thr').value = c.sell_score_threshold || 30;
+    $('monitor').checked = !!c.monitor_enabled;
+    $('tg_enabled').checked = !!c.telegram_enabled;
+    $('daily_hour').value = c.daily_summary_hour ?? 8;
+    $('telegramstatus').textContent =
+      'Telegram: ' + (c.telegram_configured ? 'konfigurerat' : 'inte konfigurerat') +
+      ' • ' + (c.telegram_enabled ? 'bevakning aktiv' : 'bevakning av');
+  } catch(e) {}
+}
+
+async function saveConfig() {
+  const p = {
+    monitor_enabled: $('monitor').checked,
+    buy_score_threshold: Number($('buy_thr').value),
+    sell_score_threshold: Number($('sell_thr').value),
+    telegram_enabled: $('tg_enabled').checked,
+    daily_summary_hour: Number($('daily_hour').value)
+  };
+  const r = await fetch('/api/config', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p)
+  });
+  const d = await r.json();
+  $('telegramstatus').textContent = r.ok ? 'Inställningar sparade.' : 'Fel: ' + d.error;
+}
+
+async function testTelegram() {
+  $('telegramstatus').textContent = 'Skickar test…';
+  const r = await fetch('/api/telegram/test', {method:'POST'});
+  const d = await r.json();
+  $('telegramstatus').textContent = r.ok ? 'Testmeddelande skickat.' : d.error;
+}
+
+async function runMonitor() {
+  $('telegramstatus').textContent = 'Kontrollerar…';
+  const r = await fetch('/api/monitor/run', {method:'POST'});
+  const d = await r.json();
+  $('telegramstatus').textContent = r.ok ? 'Kontroll klar.' : d.error;
+}
+
+async function refreshAll() {
+  await analyse();
+  await loadNews();
+}
+
+loadConfig();
+refreshAll();
+setInterval(refreshAll, 5 * 60 * 1000);
+</script></body></html>
